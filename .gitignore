@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.json
+*.md
+.env
+node_modules/
