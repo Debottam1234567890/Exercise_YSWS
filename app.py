@@ -22,6 +22,11 @@ app = Flask(__name__)
 @app.route('/api/fitness-webhook', methods=['POST'])
 def fitness_webhook():
     try:
+        # 0. Anti-Cheat: API Secret Verification
+        api_key_header = request.headers.get("X-API-KEY")
+        if api_key_header != "hackclub-fitness":
+            return jsonify({"error": "Unauthorized. Nice try, hacker!"}), 401
+            
         webhook_data = request.json
         
         # Check if the iPhone sent empty data or forgot the application/json header
@@ -53,58 +58,65 @@ def fitness_webhook():
         if not user_id:
             return jsonify({"error": "Missing user_id"}), 400
 
-        # 2. Calculate Base FitCoins based on sport
-        base_fitcoins = 0
-        if activity_type == "steps":
-            base_fitcoins = value / 100
-        elif activity_type == "swimming":
-            base_fitcoins = value * 10
-        elif activity_type == "running":
-            base_fitcoins = value * 20
-        elif activity_type == "weight_lifting":
-            base_fitcoins = value * 30
-            
-        # If no coins earned, don't process further
-        if base_fitcoins <= 0:
-            return jsonify({"message": "No FitCoins earned"}), 200
-
         # 3. Read Database for Cheating & Streaks
         user_ref = db.collection('Users').document(user_id)
         user_doc = user_ref.get()
         
         current_streak = 0
+        previous_steps = 0
         
         if user_doc.exists:
             user_data = user_doc.to_dict()
             last_logged_at = user_data.get('last_logged_at')
             current_streak = user_data.get('current_streak', 0)
             
-            # Anti-Cheat: Check if last log was less than 1 hour ago
-            if last_logged_at:
-                # Firestore returns datetime objects with timezone info
-                time_since_last_log = datetime.now(timezone.utc) - last_logged_at
-                if time_since_last_log < timedelta(hours=1):
-                    return jsonify({"error": "Cooldown active. Try again later!"}), 429
-                    
-        # 5. Calculate Final FitCoins with Streak Multiplier
+            # Check if they already logged steps today
+            if last_logged_at and last_logged_at.date() == datetime.now(timezone.utc).date():
+                previous_steps = user_data.get('last_steps_today', 0)
+
+        # 4. DELTA MATH & DAILY CAPS
+        # Anti-Cheat: Maximum 30,000 steps per day
+        MAX_DAILY_STEPS = 30000
+        if value > MAX_DAILY_STEPS:
+            value = MAX_DAILY_STEPS # Cap their total steps
+            
+        new_steps = value - previous_steps
+        if new_steps <= 0:
+            return jsonify({"message": "No new steps taken since last sync"}), 200
+            
+        # 5. Calculate Base FitCoins based on sport
+        base_fitcoins = 0
+        if activity_type == "steps":
+            base_fitcoins = new_steps / 100
+        elif activity_type == "swimming":
+            base_fitcoins = new_steps * 10
+        elif activity_type == "running":
+            base_fitcoins = new_steps * 20
+        elif activity_type == "weight_lifting":
+            base_fitcoins = new_steps * 30
+            
+        # 6. Calculate Final FitCoins with Streak Multiplier
         # Equation: base_points + base_points * (streak * 0.01)
         multiplier_bonus = base_fitcoins * (current_streak * 0.01)
-        final_fitcoins = round(base_fitcoins + multiplier_bonus, 2)
+        
+        # Anti-Cheat: Eliminate floating point decimals! 
+        final_fitcoins = int(round(base_fitcoins + multiplier_bonus))
 
-        # 6. Update the User's Wallet in Firestore
+        # 7. Update the User's Wallet in Firestore
         if not user_doc.exists:
             # Create a new user profile if this is their first time
             user_ref.set({
                 'fitcoins_balance': final_fitcoins,
                 'current_streak': 1, # Start their streak!
-                'last_logged_at': firestore.SERVER_TIMESTAMP
+                'last_logged_at': firestore.SERVER_TIMESTAMP,
+                'last_steps_today': value
             })
         else:
             # Update existing user profile safely using Increment
             user_ref.update({
                 'fitcoins_balance': firestore.Increment(final_fitcoins),
-                'last_logged_at': firestore.SERVER_TIMESTAMP
-                # Note: You'll want a cron job to update streaks daily, but we leave it as is for now
+                'last_logged_at': firestore.SERVER_TIMESTAMP,
+                'last_steps_today': value
             })
 
         # 6. Save the raw workout data to a subcollection for history
