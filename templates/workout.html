@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>AI Workout Reviewer</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <h1>AI Head Rotation Reviewer</h1>
+    <h2 id="score_display">Rotation Count: 0</h2>
+    <video id="webcam" autoplay playsinline style="display: none;"></video>
+    <canvas id="output_canvas" width="640" height="480" style="border: 2px solid cyan;"></canvas>
+    <script>
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const scoreDisplay = document.getElementById('score_display');
+        let rotationCount = 0;
+        let circleStage = 0; // 0=start, 1=left, 2=right
+        let minNoseY = 1.0;
+        let maxNoseY = 0.0;
+
+        function onResults(results) {
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            // If the ML model sees a human... draw the stickman!
+            if (results.poseLandmarks) {
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
+                    { color: '#00FF00', lineWidth: 4 }); // Green lines
+                drawLandmarks(canvasCtx, results.poseLandmarks,
+                    { color: '#FF0000', lineWidth: 2 }); // Red dots
+
+                const nose = results.poseLandmarks[0];
+                const leftEar = results.poseLandmarks[7];
+                const rightEar = results.poseLandmarks[8];
+                
+                const distLeft = Math.abs(nose.x - leftEar.x);
+                const distRight = Math.abs(nose.x - rightEar.x);
+
+                // Anti-Cheat: Track how far up and down the nose moves
+                minNoseY = Math.min(minNoseY, nose.y);
+                maxNoseY = Math.max(maxNoseY, nose.y);
+
+                if (distLeft < 0.05) {
+                    if (circleStage === 0) {
+                        circleStage = 1; // Started on Left
+                        minNoseY = nose.y; maxNoseY = nose.y;
+                    } else if (circleStage === 2) {
+                        // Completed a Right -> Left sweep! (Full circle complete)
+                        if ((maxNoseY - minNoseY) > 0.10) {
+                            rotationCount++;
+                            scoreDisplay.innerText = "Rotations: " + rotationCount;
+                        } else {
+                            console.log("Anti-Cheat: You are just shaking your head! Roll your neck!");
+                        }
+                        circleStage = 1; // Reset for next roll
+                        minNoseY = nose.y; maxNoseY = nose.y;
+                    }
+                } 
+                else if (distRight < 0.05) {
+                    if (circleStage === 0) {
+                        circleStage = 2; // Started on Right
+                        minNoseY = nose.y; maxNoseY = nose.y;
+                    } else if (circleStage === 1) {
+                        // Completed a Left -> Right sweep! (Half circle complete)
+                        if ((maxNoseY - minNoseY) < 0.10) {
+                            console.log("Anti-Cheat: You are just shaking your head! Roll your neck!");
+                        }
+                        // We don't add to the score here, because it's only half a rotation!
+                        circleStage = 2; // Reset for the return trip
+                        minNoseY = nose.y; maxNoseY = nose.y;
+                    }
+                }
+            }
+        }
+
+        // Initialize the MediaPipe Pose Model
+        const pose = new Pose({
+            locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+            }
+        });
+
+        pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        pose.onResults(onResults);
+
+        // Turn on the Webcam and feed it to the Pose Model
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await pose.send({ image: videoElement });
+            },
+            width: 640,
+            height: 480
+        });
+
+        camera.start();
+    </script>
+
+</body>
+
+</html>

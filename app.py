@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime, timezone, timedelta
 from openai import OpenAI
 import os
-model = "openrouter/auto"
+model = "openrouter:free"
 api_key = os.getenv("OPENROUTER_API_KEY", "your-api-key")
 server_url = "https://ai.hackclub.com/proxy/v1"
 GOAL_PROMPT = """You are a fitness coach. You will create a goal based on the user statistics and user activity. It will be completed by the user in a week. Make sure the goal is achievable and realistic for the user and you should include only the goal and nothing else."""
@@ -18,6 +18,11 @@ firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 app = Flask(__name__)
+
+@app.route('/workout')
+def workout_page():
+    # Welcome to the future! This serves our shiny new AI Anti-Cheat workout page.
+    return render_template('workout.html')
 
 @app.route('/api/fitness-webhook', methods=['POST'])
 def fitness_webhook():
