@@ -4,3 +4,4 @@ __pycache__/
 *.md
 .env
 node_modules/
+ml_pipeline/exercise_dataset.csv
