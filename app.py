@@ -4,25 +4,81 @@ from firebase_admin import credentials, firestore
 from datetime import datetime, timezone, timedelta
 from openai import OpenAI
 import os
+import numpy as np
+import pandas as pd
+import pickle
+import tensorflow as tf
+
+# setup the openai client for the fitness coach
 model = "openrouter:free"
 api_key = os.getenv("OPENROUTER_API_KEY", "your-api-key")
 server_url = "https://ai.hackclub.com/proxy/v1"
 GOAL_PROMPT = """You are a fitness coach. You will create a goal based on the user statistics and user activity. It will be completed by the user in a week. Make sure the goal is achievable and realistic for the user and you should include only the goal and nothing else."""
-
 
 client = OpenAI(api_key=api_key, base_url=server_url)
 
 # 1. Initialize Firebase Admin using your downloaded JSON file
 cred = credentials.Certificate('fitness-ysws-firebase-adminsdk-fbsvc-c6dad255a7.json')
 firebase_admin.initialize_app(cred)
-
 db = firestore.client()
+
 app = Flask(__name__)
+
+# ==============================================================================
+# AI MODEL SETUP
+# Load the brain ONE TIME when the server starts so we don't crash the RAM
+# ==============================================================================
+print("Loading AI Brain into memory...")
+MODEL = tf.keras.models.load_model('ml_pipeline/exercise_model.keras')
+
+with open('ml_pipeline/scaler.pkl', 'rb') as f:
+    SCALER = pickle.load(f)
+
+LABEL_CLASSES = np.load('ml_pipeline/label_classes.npy', allow_pickle=True)
+print("AI Brain Loaded Successfully! Ready for webcam data.")
+
 
 @app.route('/workout')
 def workout_page():
     # Welcome to the future! This serves our shiny new AI Anti-Cheat workout page.
     return render_template('workout.html')
+
+
+@app.route('/api/predict', methods=['POST'])
+def predict_pose():
+    # this gets hit 30 times a second by the webcam, so it needs to be FAST
+    try:
+        landmarks = request.json.get('landmarks')
+        if not landmarks or len(landmarks) < 33:
+            return jsonify({"error": "No human detected"}), 400
+            
+        # Extract the exact 132 features (x, y, z, visibility for 33 landmarks)
+        row = []
+        for lm in landmarks:
+            row.extend([lm['x'], lm['y'], lm['z'], lm.get('visibility', 0.0)])
+            
+        # Reshape to a 2D array: 1 row, 132 columns
+        # wrap in a dataframe so sklearn doesnt yell about missing feature names
+        X_raw = pd.DataFrame([row], columns=SCALER.feature_names_in_)
+        
+        # Scale the webcam data EXACTLY how the training data was scaled
+        X_scaled = SCALER.transform(X_raw)
+        
+        # Ask the AI what exercise this is!
+        predictions = MODEL.predict(X_scaled, verbose=0)
+        class_index = np.argmax(predictions[0])
+        confidence = float(predictions[0][class_index])
+        exercise_name = LABEL_CLASSES[class_index]
+        
+        return jsonify({
+            "exercise": exercise_name,
+            "confidence": confidence
+        }), 200
+        
+    except Exception as e:
+        print(f"Prediction crashed: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/fitness-webhook', methods=['POST'])
 def fitness_webhook():
@@ -101,7 +157,6 @@ def fitness_webhook():
             base_fitcoins = new_steps * 30
             
         # 6. Calculate Final FitCoins with Streak Multiplier
-        # Equation: base_points + base_points * (streak * 0.01)
         multiplier_bonus = base_fitcoins * (current_streak * 0.01)
         
         # Anti-Cheat: Eliminate floating point decimals! 
@@ -124,7 +179,7 @@ def fitness_webhook():
                 'last_steps_today': value
             })
 
-        # 6. Save the raw workout data to a subcollection for history
+        # 8. Save the raw workout data to a subcollection for history
         workout_ref = user_ref.collection('Workouts').document()
         webhook_data['receivedAt'] = firestore.SERVER_TIMESTAMP
         webhook_data['fitcoins_earned'] = final_fitcoins
@@ -140,6 +195,7 @@ def fitness_webhook():
         import traceback
         traceback.print_exc()
         return jsonify({"error": "Internal Server Error", "details": str(e)}), 500
+
 
 @app.route("/api/fitness-coach", methods=["POST"])
 def coach_route():
@@ -163,6 +219,7 @@ def coach_route():
         print(f"Error: {e}")
         return jsonify({"error": "Internal Server Error"}), 500
         
+
 def get_path(user_stats, user_data):
     try:
         response = client.chat.completions.create(
@@ -179,5 +236,7 @@ def get_path(user_stats, user_data):
         print(f"AI Error: {e}")
         return "Keep pushing! Try to beat your steps from yesterday."
 
+
 if __name__ == '__main__':
+    # run the server!
     app.run(port=3000, debug=True)

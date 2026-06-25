@@ -3,89 +3,452 @@
 
 <head>
     <title>AI Workout Reviewer</title>
+    <!-- mediapipe for skeleton tracking -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
-        crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"
-        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            text-align: center;
+            background: #0a0a0a;
+            color: white;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { color: #ddd; font-size: 22px; margin-bottom: 5px; }
+
+        #ai_prediction {
+            font-size: 36px;
+            font-weight: bold;
+            color: #FF4444;
+            text-transform: uppercase;
+            margin: 8px 0;
+            min-height: 45px;
+        }
+
+        #stats-panel {
+            display: flex;
+            justify-content: center;
+            gap: 50px;
+            margin: 12px 0;
+        }
+        .stat-box {
+            background: #1a1a2e;
+            padding: 12px 28px;
+            border-radius: 12px;
+            border: 2px solid #333;
+        }
+        .stat-label { font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-value { font-size: 48px; font-weight: bold; color: #00FFCC; }
+
+        #output_canvas {
+            border: 4px solid #00FFCC;
+            border-radius: 12px;
+            margin-top: 12px;
+            box-shadow: 0 0 25px #00FFCC33;
+        }
+
+        #reset-btn {
+            margin-top: 14px;
+            padding: 10px 28px;
+            font-size: 15px;
+            background: #FF4444;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        #reset-btn:hover { background: #FF6666; }
+    </style>
 </head>
 
 <body>
-    <h1>AI Head Rotation Reviewer</h1>
-    <h2 id="score_display">Rotation Count: 0</h2>
+    <h1>Real-Time AI Fitness Coach</h1>
+    <div id="ai_prediction">Waiting for human...</div>
+
+    <div id="stats-panel">
+        <div class="stat-box" id="rep-box">
+            <div class="stat-label">Reps</div>
+            <div class="stat-value" id="rep-count">0</div>
+        </div>
+        <div class="stat-box" id="timer-box" style="display: none;">
+            <div class="stat-label">Hold Time</div>
+            <div class="stat-value" id="hold-time">0s</div>
+        </div>
+    </div>
+
     <video id="webcam" autoplay playsinline style="display: none;"></video>
-    <canvas id="output_canvas" width="640" height="480" style="border: 2px solid cyan;"></canvas>
+    <canvas id="output_canvas" width="640" height="480"></canvas>
+    <br>
+    <button id="reset-btn" onclick="resetCounters()">Reset Counter</button>
+
     <script>
         const videoElement = document.getElementById('webcam');
         const canvasElement = document.getElementById('output_canvas');
         const canvasCtx = canvasElement.getContext('2d');
-        const scoreDisplay = document.getElementById('score_display');
-        let rotationCount = 0;
-        let circleStage = 0; // 0=start, 1=left, 2=right
-        let minNoseY = 1.0;
-        let maxNoseY = 0.0;
+        const aiDisplay = document.getElementById('ai_prediction');
 
-        function onResults(results) {
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+        // ======= CONFIG =======
+        // tweak these if the counting feels off
+        const CONFIDENCE_MIN = 0.92;       // ignore anything below 92% confidence
+        const CONFIDENCE_TIMED = 0.95;     // timed exercises need even higher confidence (since we cant use motion)
+        const LOCK_FRAMES = 18;            // consecutive same predictions to lock in
+        const LOCK_FRAMES_TIMED = 25;      // timed exercises need more frames since person is still
+        const UNLOCK_FRAMES = 20;          // 20 mismatches in a row = user switched exercises
+        const PRED_COOLDOWN = 200;         // only hit the backend every 200ms (saves CPU)
+        const MOTION_MIN = 0.005;          // min body movement to not be "idle"
 
-            // If the ML model sees a human... draw the stickman!
-            if (results.poseLandmarks) {
-                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS,
-                    { color: '#00FF00', lineWidth: 4 }); // Green lines
-                drawLandmarks(canvasCtx, results.poseLandmarks,
-                    { color: '#FF0000', lineWidth: 2 }); // Red dots
+        // IMPORTANT: only these body landmarks count for motion detection
+        // face landmarks (nose, eyes, ears) are EXCLUDED so head movements dont trigger false positives
+        const BODY_INDICES = [11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28]; // shoulders, elbows, wrists, hips, knees, ankles
 
-                const nose = results.poseLandmarks[0];
-                const leftEar = results.poseLandmarks[7];
-                const rightEar = results.poseLandmarks[8];
-                
-                const distLeft = Math.abs(nose.x - leftEar.x);
-                const distRight = Math.abs(nose.x - rightEar.x);
+        // these exercises dont have reps, we measure hold time instead
+        const TIMED_EXERCISES = new Set([
+            'plank', 'mountain_pose', 'tree_pose', 'padamasana', 'bhujasana', 'trikasana'
+        ]);
 
-                // Anti-Cheat: Track how far up and down the nose moves
-                minNoseY = Math.min(minNoseY, nose.y);
-                maxNoseY = Math.max(maxNoseY, nose.y);
+        // ======= STATE =======
+        let isPredicting = false;
+        let lastPredTime = 0;
 
-                if (distLeft < 0.05) {
-                    if (circleStage === 0) {
-                        circleStage = 1; // Started on Left
-                        minNoseY = nose.y; maxNoseY = nose.y;
-                    } else if (circleStage === 2) {
-                        // Completed a Right -> Left sweep! (Full circle complete)
-                        if ((maxNoseY - minNoseY) > 0.10) {
-                            rotationCount++;
-                            scoreDisplay.innerText = "Rotations: " + rotationCount;
-                        } else {
-                            console.log("Anti-Cheat: You are just shaking your head! Roll your neck!");
-                        }
-                        circleStage = 1; // Reset for next roll
-                        minNoseY = nose.y; maxNoseY = nose.y;
-                    }
-                } 
-                else if (distRight < 0.05) {
-                    if (circleStage === 0) {
-                        circleStage = 2; // Started on Right
-                        minNoseY = nose.y; maxNoseY = nose.y;
-                    } else if (circleStage === 1) {
-                        // Completed a Left -> Right sweep! (Half circle complete)
-                        if ((maxNoseY - minNoseY) < 0.10) {
-                            console.log("Anti-Cheat: You are just shaking your head! Roll your neck!");
-                        }
-                        // We don't add to the score here, because it's only half a rotation!
-                        circleStage = 2; // Reset for the return trip
-                        minNoseY = nose.y; maxNoseY = nose.y;
-                    }
-                }
+        // smoothing buffer - keeps last N predictions and picks the most common one
+        let predBuffer = [];
+        const BUFFER_MAX = 8;
+
+        // lock-in tracking
+        let stablePred = null;   // what we think the exercise is (before locking)
+        let stableFrames = 0;    // how many frames in a row we saw the same prediction
+        let lockedExercise = null; // once this is set, we're committed to tracking
+        let mismatchFrames = 0;  // how many frames the prediction didnt match the lock
+
+        // rep counting stuff
+        let repCount = 0;
+        let signalHistory = [];   // rolling window of the movement signal
+        let smoothedSig = null;   // exponentially smoothed version
+        let repPhase = null;      // 'above' or 'below' the midpoint
+        let halfReps = 0;         // two half-reps = one full rep
+
+        // hold timer (for plank, yoga poses etc)
+        let holdStart = null;
+        let timerInterval = null;
+
+        // motion detection - compare landmarks between frames
+        let prevLandmarks = null;
+
+
+        // ======= HELPER FUNCTIONS =======
+
+        // pick the most common prediction from the buffer
+        function majorityVote(buffer) {
+            if (buffer.length === 0) return null;
+            const counts = {};
+            buffer.forEach(p => { counts[p] = (counts[p] || 0) + 1; });
+            let best = null, bestCount = 0;
+            for (const [pred, count] of Object.entries(counts)) {
+                if (count > bestCount) { best = pred; bestCount = count; }
+            }
+            return best;
+        }
+
+        // how much did the BODY move since the last frame?
+        // only checks shoulders, elbows, wrists, hips, knees, ankles
+        // face landmarks are excluded so nodding/shaking head doesnt count as exercise
+        function calcMotion(current, previous) {
+            if (!previous) return 1.0; // assume moving on the very first frame
+            let total = 0;
+            for (const idx of BODY_INDICES) {
+                const dx = current[idx].x - previous[idx].x;
+                const dy = current[idx].y - previous[idx].y;
+                total += Math.sqrt(dx * dx + dy * dy);
+            }
+            return total / BODY_INDICES.length;
+        }
+
+        // the "rep signal" - average Y of shoulders + wrists
+        // this naturally oscillates during basically any exercise:
+        //   squats -> shoulders go up/down
+        //   curls -> wrists go up/down
+        //   pushups -> everything goes up/down
+        function getRepSignal(landmarks) {
+            const lShoulder = landmarks[11].y;
+            const rShoulder = landmarks[12].y;
+            const lWrist = landmarks[15].y;
+            const rWrist = landmarks[16].y;
+            return (lShoulder + rShoulder + lWrist + rWrist) / 4;
+        }
+
+        // the core rep detection algorithm
+        // tracks peaks and valleys in the movement signal using hysteresis
+        function processRepCounting(landmarks) {
+            const raw = getRepSignal(landmarks);
+
+            // smooth the signal so tiny jitters dont count as reps
+            if (smoothedSig === null) {
+                smoothedSig = raw;
+            } else {
+                smoothedSig = smoothedSig * 0.7 + raw * 0.3; // exponential smoothing
+            }
+
+            signalHistory.push(smoothedSig);
+            if (signalHistory.length > 30) signalHistory.shift();
+
+            // need at least 10 data points before we can detect anything
+            if (signalHistory.length < 10) return;
+
+            const minY = Math.min(...signalHistory);
+            const maxY = Math.max(...signalHistory);
+            const range = maxY - minY;
+
+            // if theres barely any movement, dont count noise as reps
+            if (range < 0.04) return;
+
+            const mid = (minY + maxY) / 2;
+            const hysteresis = range * 0.2; // dead zone to prevent double-counting
+
+            // phase detection: when signal crosses the midpoint, thats a half-rep
+            if (smoothedSig > mid + hysteresis && repPhase !== 'below') {
+                if (repPhase === 'above') halfReps++;
+                repPhase = 'below'; // high Y value = physically low position (Y axis is inverted)
+            } else if (smoothedSig < mid - hysteresis && repPhase !== 'above') {
+                if (repPhase === 'below') halfReps++;
+                repPhase = 'above';
+            }
+
+            // two half-reps = one full rep (e.g. curl up + curl down = 1)
+            if (halfReps >= 2) {
+                repCount++;
+                halfReps = 0;
+                document.getElementById('rep-count').textContent = repCount;
+
+                // quick yellow flash when a rep is counted
+                const el = document.getElementById('rep-count');
+                el.style.color = '#FFFF00';
+                setTimeout(() => { el.style.color = '#00FFCC'; }, 300);
             }
         }
 
-        // Initialize the MediaPipe Pose Model
-        const pose = new Pose({
-            locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+        function startHoldTimer() {
+            holdStart = Date.now();
+            document.getElementById('timer-box').style.display = 'block';
+            document.getElementById('rep-box').style.display = 'none';
+
+            timerInterval = setInterval(() => {
+                const secs = Math.floor((Date.now() - holdStart) / 1000);
+                const mins = Math.floor(secs / 60);
+                const rem = secs % 60;
+                if (mins > 0) {
+                    document.getElementById('hold-time').textContent = mins + ':' + rem.toString().padStart(2, '0');
+                } else {
+                    document.getElementById('hold-time').textContent = secs + 's';
+                }
+            }, 500);
+        }
+
+        function stopHoldTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+            holdStart = null;
+        }
+
+        function resetCounters() {
+            lockedExercise = null;
+            stablePred = null;
+            stableFrames = 0;
+            mismatchFrames = 0;
+            repCount = 0;
+            halfReps = 0;
+            repPhase = null;
+            smoothedSig = null;
+            signalHistory = [];
+            predBuffer = [];
+            stopHoldTimer();
+            document.getElementById('rep-count').textContent = '0';
+            document.getElementById('hold-time').textContent = '0s';
+            document.getElementById('rep-box').style.display = 'block';
+            document.getElementById('timer-box').style.display = 'none';
+            aiDisplay.textContent = 'Reset! Start an exercise...';
+            aiDisplay.style.color = '#FF4444';
+        }
+
+
+        // ======= MAIN CALLBACK - fires every single camera frame =======
+
+        function onResults(results) {
+            // always draw the camera feed regardless
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (!results.poseLandmarks) {
+                aiDisplay.textContent = 'No human detected...';
+                aiDisplay.style.color = '#FF4444';
+                prevLandmarks = null;
+                return;
             }
+
+            // draw the green skeleton and red dots
+            drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, { color: '#00FF00', lineWidth: 4 });
+            drawLandmarks(canvasCtx, results.poseLandmarks, { color: '#FF0000', lineWidth: 2 });
+
+            // check if the ENTIRE body is fully in frame!
+            let visibleBodyParts = 0;
+            for (const idx of BODY_INDICES) {
+                if (results.poseLandmarks[idx].visibility > 0.65) visibleBodyParts++;
+            }
+            
+            // STRICT MODE: All 12 major joints (shoulders to ankles) MUST be on camera
+            if (visibleBodyParts < 12) { 
+                aiDisplay.textContent = 'Step back! Entire body must be visible.';
+                aiDisplay.style.color = '#FFAA00';
+                return;
+            }
+
+            // motion check - how much did the person move?
+            const motion = calcMotion(results.poseLandmarks, prevLandmarks);
+            prevLandmarks = results.poseLandmarks.map(l => ({ x: l.x, y: l.y, z: l.z }));
+
+            // if we're locked into a rep-based exercise, count reps every frame
+            // (we need every frame for smooth signal tracking, not just when we predict)
+            if (lockedExercise && !TIMED_EXERCISES.has(lockedExercise)) {
+                processRepCounting(results.poseLandmarks);
+            }
+
+            // throttle backend calls - dont hit the server 30 times per second lol
+            const now = Date.now();
+            if (now - lastPredTime < PRED_COOLDOWN || isPredicting) return;
+
+            lastPredTime = now;
+            isPredicting = true;
+
+            fetch('/api/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ landmarks: results.poseLandmarks })
+            })
+            .then(r => r.json())
+            .then(data => {
+                isPredicting = false;
+
+                // if the model isnt confident, ignore the prediction
+                if (!data.exercise || data.confidence < CONFIDENCE_MIN) {
+                    if (!lockedExercise) {
+                        stableFrames = 0;
+                        aiDisplay.textContent = 'Low confidence... adjusting';
+                        aiDisplay.style.color = '#666';
+                    }
+                    return;
+                }
+
+                // add to smoothing buffer and get majority vote
+                predBuffer.push(data.exercise);
+                if (predBuffer.length > BUFFER_MAX) predBuffer.shift();
+                const voted = majorityVote(predBuffer);
+                const conf = Math.round(data.confidence * 100);
+                const niceName = voted.replace(/_/g, ' ');
+
+
+                if (!lockedExercise) {
+                    // ========================================
+                    // PHASE 1: DETECTION (trying to lock in)
+                    // ========================================
+
+                    const isTimedPred = TIMED_EXERCISES.has(voted);
+
+                    // motion gate - but ONLY for rep-based exercises
+                    // for timed exercises (plank, yoga), the person IS supposed to be still
+                    // so we skip the motion check but demand higher confidence instead
+                    if (!isTimedPred && motion < MOTION_MIN) {
+                        aiDisplay.textContent = 'Standing still... start moving!';
+                        aiDisplay.style.color = '#555';
+                        stableFrames = 0;
+                        return;
+                    }
+
+                    // timed exercises need higher confidence since we cant rely on motion
+                    const requiredConf = isTimedPred ? CONFIDENCE_TIMED : CONFIDENCE_MIN;
+                    if (data.confidence < requiredConf) {
+                        stableFrames = 0;
+                        return;
+                    }
+
+                    // count consecutive same predictions
+                    if (voted === stablePred) {
+                        stableFrames++;
+                    } else {
+                        stablePred = voted;
+                        stableFrames = 1;
+                    }
+
+                    const neededFrames = isTimedPred ? LOCK_FRAMES_TIMED : LOCK_FRAMES;
+                    if (stableFrames >= neededFrames) {
+                        // LOCKED IN! the AI is confident this is what they're doing
+                        lockedExercise = voted;
+                        mismatchFrames = 0;
+                        repCount = 0;
+                        halfReps = 0;
+                        repPhase = null;
+                        smoothedSig = null;
+                        signalHistory = [];
+
+                        if (TIMED_EXERCISES.has(lockedExercise)) {
+                            startHoldTimer();
+                        } else {
+                            document.getElementById('rep-box').style.display = 'block';
+                            document.getElementById('timer-box').style.display = 'none';
+                            document.getElementById('rep-count').textContent = '0';
+                        }
+
+                        aiDisplay.textContent = 'LOCKED: ' + niceName + ' (' + conf + '%)';
+                        aiDisplay.style.color = '#00FFCC';
+                    } else {
+                        // show lock-in progress
+                        const pct = Math.round((stableFrames / neededFrames) * 100);
+                        aiDisplay.textContent = 'Detecting: ' + niceName + ' (' + pct + '% locked)';
+                        aiDisplay.style.color = '#FFAA00';
+                    }
+
+                } else {
+                    // ========================================
+                    // PHASE 2: TRACKING (locked & counting)
+                    // ========================================
+
+                    if (voted === lockedExercise) {
+                        // still doing the same exercise, all good
+                        mismatchFrames = 0;
+                        const niceLockedName = lockedExercise.replace(/_/g, ' ');
+                        aiDisplay.textContent = niceLockedName.toUpperCase() + ' (' + conf + '%)';
+                        aiDisplay.style.color = '#00FFCC';
+                    } else {
+                        // hmm the prediction changed... maybe they switched exercises
+                        mismatchFrames++;
+                        if (mismatchFrames > UNLOCK_FRAMES) {
+                            // ok they definitely switched, reset and start detecting again
+                            stopHoldTimer();
+                            lockedExercise = null;
+                            stablePred = voted;
+                            stableFrames = 1;
+                            mismatchFrames = 0;
+                            predBuffer = [voted];
+                            aiDisplay.textContent = 'Exercise changed! Re-detecting...';
+                            aiDisplay.style.color = '#FFAA00';
+                        }
+                    }
+                }
+            })
+            .catch(err => {
+                isPredicting = false;
+                console.error("Backend error:", err);
+            });
+        }
+
+
+        // ======= MEDIAPIPE SETUP =======
+
+        const pose = new Pose({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
         });
 
         pose.setOptions({
@@ -97,18 +460,13 @@
 
         pose.onResults(onResults);
 
-        // Turn on the Webcam and feed it to the Pose Model
+        // fire up the webcam
         const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await pose.send({ image: videoElement });
-            },
+            onFrame: async () => { await pose.send({ image: videoElement }); },
             width: 640,
             height: 480
         });
-
         camera.start();
     </script>
-
 </body>
-
 </html>
