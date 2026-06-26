@@ -81,7 +81,7 @@
         </div>
     </div>
 
-    <video id="webcam" autoplay playsinline style="display: none;"></video>
+    <video id="webcam" autoplay playsinline style="position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px;"></video>
     <canvas id="output_canvas" width="640" height="480"></canvas>
     <br>
     <button id="reset-btn" onclick="resetCounters()">Reset Counter</button>
@@ -106,11 +106,11 @@
         // tweak these if the counting feels off
         const CONFIDENCE_MIN = 0.92;       // ignore anything below 92% confidence
         const CONFIDENCE_TIMED = 0.95;     // timed exercises need even higher confidence (since we cant use motion)
-        const LOCK_FRAMES = 18;            // consecutive same predictions to lock in
+        const LOCK_FRAMES = 12;            // consecutive same predictions to lock in
         const LOCK_FRAMES_TIMED = 25;      // timed exercises need more frames since person is still
         const UNLOCK_FRAMES = 20;          // 20 mismatches in a row = user switched exercises
         const PRED_COOLDOWN = 200;         // only hit the backend every 200ms (saves CPU)
-        const MOTION_MIN = 0.005;          // min body movement to not be "idle"
+        const MOTION_MIN = 0.001;          // min body movement to not be "idle" (more lenient now)
 
         // IMPORTANT: only these body landmarks count for motion detection
         // face landmarks (nose, eyes, ears) are EXCLUDED so head movements dont trigger false positives
@@ -134,6 +134,7 @@
         let stableFrames = 0;    // how many frames in a row we saw the same prediction
         let lockedExercise = null; // once this is set, we're committed to tracking
         let mismatchFrames = 0;  // how many frames the prediction didnt match the lock
+        let idleFrames = 0;      // how many frames in a row the user has been standing still during lock-in
 
         // rep counting stuff
         let repCount = 0;
@@ -269,6 +270,7 @@
             stablePred = null;
             stableFrames = 0;
             mismatchFrames = 0;
+            idleFrames = 0;
             repCount = 0;
             halfReps = 0;
             repPhase = null;
@@ -392,11 +394,23 @@
                     // for timed exercises (plank, yoga), the person IS supposed to be still
                     // so we skip the motion check but demand higher confidence instead
                     if (!isTimedPred && motion < MOTION_MIN) {
-                        aiDisplay.textContent = 'Standing still... start moving!';
-                        aiDisplay.style.color = '#555';
-                        stableFrames = 0;
+                        idleFrames++;
+                        if (idleFrames > 50) { // about 10 seconds of continuous stillness
+                            aiDisplay.textContent = 'Standing still... start moving!';
+                            aiDisplay.style.color = '#555';
+                            stableFrames = 0;
+                        } else {
+                            if (stableFrames > 0) {
+                                const needed = isTimedPred ? LOCK_FRAMES_TIMED : LOCK_FRAMES;
+                                const pct = Math.round((stableFrames / needed) * 100);
+                                aiDisplay.textContent = 'Paused: ' + niceName + ' (' + pct + '% locked)';
+                                aiDisplay.style.color = '#FFAA00';
+                            }
+                        }
                         return;
                     }
+                    
+                    idleFrames = 0; // reset if moving
 
                     // timed exercises need higher confidence since we cant rely on motion
                     const requiredConf = isTimedPred ? CONFIDENCE_TIMED : CONFIDENCE_MIN;
@@ -507,51 +521,75 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            // Stop the webcam
             if (camera) {
                 camera.stop();
                 camera = null;
             }
 
-            // Load the video file
             const url = URL.createObjectURL(file);
-            videoElement.srcObject = null;
-            videoElement.src = url;
-            videoElement.loop = true;
-            videoElement.muted = true;
+
+            if (window.fileVideoElement) {
+                window.fileVideoElement.pause();
+                window.fileVideoElement.src = '';
+            } else {
+                window.fileVideoElement = document.createElement('video');
+                window.fileVideoElement.style.position = 'absolute';
+                window.fileVideoElement.style.zIndex = '-100';
+                window.fileVideoElement.style.left = '0';
+                window.fileVideoElement.style.top = '0';
+                window.fileVideoElement.style.width = '10px';
+                window.fileVideoElement.style.height = '10px';
+                window.fileVideoElement.style.opacity = '0.01';
+                window.fileVideoElement.playsInline = true;
+                window.fileVideoElement.muted = true;
+                document.body.appendChild(window.fileVideoElement);
+            }
+
+            const fv = window.fileVideoElement;
+            fv.src = url;
+            fv.loop = true;
             filePlaying = true;
             
-            // Reset state
             resetCounters();
             prevLandmarks = null;
-            
-            videoElement.play();
 
             let loopActive = false;
             async function processVideoFrame() {
-                if (!filePlaying || videoElement.paused || videoElement.ended) {
+                if (!filePlaying) {
                     loopActive = false;
                     return;
                 }
-                
-                if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+
+                if (fv.paused) {
+                    fv.play().catch(()=>{});
+                }
+
+                if (fv.readyState >= 2 && fv.videoWidth > 0 && fv.videoHeight > 0) {
                     try {
-                        await pose.send({ image: videoElement });
-                    } catch (e) {
-                        console.error("MediaPipe error:", e);
+                        const offscreen = document.createElement('canvas');
+                        offscreen.width = fv.videoWidth;
+                        offscreen.height = fv.videoHeight;
+                        const offCtx = offscreen.getContext('2d');
+                        offCtx.drawImage(fv, 0, 0, offscreen.width, offscreen.height);
+                        
+                        await pose.send({ image: offscreen });
+                    } catch (err) {
+                        console.error("MediaPipe error:", err);
                     }
                 }
-                
                 requestAnimationFrame(processVideoFrame);
             }
             
-            videoElement.addEventListener('playing', () => {
+            fv.play().then(() => {
                 if (!loopActive) {
                     loopActive = true;
                     processVideoFrame();
                 }
+            }).catch(e => {
+                console.error("Failed to play video:", e);
             });
         });
+
 
         // Load video from path string
         document.getElementById('load-path-btn').addEventListener('click', () => {

@@ -17,12 +17,7 @@ GOAL_PROMPT = """You are a fitness coach. You will create a goal based on the us
 
 client = OpenAI(api_key=api_key, base_url=server_url)
 
-# 1. Initialize Firebase Admin using your downloaded JSON file
-cred = credentials.Certificate('fitness-ysws-firebase-adminsdk-fbsvc-c6dad255a7.json')
-firebase_admin.initialize_app(cred)
-db = firestore.client()
-
-app = Flask(__name__)
+# Firebase initialization moved below TensorFlow to prevent gRPC deadlock
 
 # ==============================================================================
 # AI MODEL SETUP
@@ -36,6 +31,13 @@ with open('ml_pipeline/scaler.pkl', 'rb') as f:
 
 LABEL_CLASSES = np.load('ml_pipeline/label_classes.npy', allow_pickle=True)
 print("AI Brain Loaded Successfully! Ready for webcam data.")
+
+# 1. Initialize Firebase Admin using your downloaded JSON file
+cred = credentials.Certificate('fitness-ysws-firebase-adminsdk-fbsvc-c6dad255a7.json')
+firebase_admin.initialize_app(cred)
+db = firestore.client()
+
+app = Flask(__name__)
 
 
 @app.route('/workout')
@@ -242,4 +244,4 @@ def serve_video(filename):
 
 if __name__ == '__main__':
     # run the server!
-    app.run(port=3000, debug=True)
+    app.run(port=3000, debug=True, use_reloader=False, threaded=False)
