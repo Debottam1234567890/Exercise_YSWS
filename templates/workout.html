@@ -534,7 +534,14 @@
                     return;
                 }
                 
-                await pose.send({ image: videoElement });
+                if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+                    try {
+                        await pose.send({ image: videoElement });
+                    } catch (e) {
+                        console.error("MediaPipe error:", e);
+                    }
+                }
+                
                 requestAnimationFrame(processVideoFrame);
             }
             
@@ -580,7 +587,15 @@
                     loopActive = false;
                     return;
                 }
-                await pose.send({ image: videoElement });
+                
+                if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+                    try {
+                        await pose.send({ image: videoElement });
+                    } catch (e) {
+                        console.error("MediaPipe error:", e);
+                    }
+                }
+                
                 requestAnimationFrame(processVideoFrame);
             }
             
