@@ -527,17 +527,23 @@
             
             videoElement.play();
 
-            // Manually feed the video frames to mediapipe using requestAnimationFrame
+            let loopActive = false;
             async function processVideoFrame() {
-                if (!filePlaying || videoElement.paused || videoElement.ended) return;
+                if (!filePlaying || videoElement.paused || videoElement.ended) {
+                    loopActive = false;
+                    return;
+                }
                 
                 await pose.send({ image: videoElement });
                 requestAnimationFrame(processVideoFrame);
             }
             
-            videoElement.onloadeddata = () => {
-                processVideoFrame();
-            };
+            videoElement.addEventListener('playing', () => {
+                if (!loopActive) {
+                    loopActive = true;
+                    processVideoFrame();
+                }
+            });
         });
 
         // Load video from path string
@@ -568,15 +574,22 @@
                 aiDisplay.style.color = "#FF4444";
             });
 
+            let loopActive = false;
             async function processVideoFrame() {
-                if (!filePlaying || videoElement.paused || videoElement.ended) return;
+                if (!filePlaying || videoElement.paused || videoElement.ended) {
+                    loopActive = false;
+                    return;
+                }
                 await pose.send({ image: videoElement });
                 requestAnimationFrame(processVideoFrame);
             }
             
-            videoElement.onloadeddata = () => {
-                processVideoFrame();
-            };
+            videoElement.addEventListener('playing', () => {
+                if (!loopActive) {
+                    loopActive = true;
+                    processVideoFrame();
+                }
+            });
         });
     </script>
 </body>
