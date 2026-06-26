@@ -88,6 +88,11 @@
 
     <div style="margin-top: 20px; background: #1a1a2e; padding: 15px; border-radius: 8px; display: inline-block; border: 1px solid #333;">
         <p style="margin: 0 0 10px 0; font-size: 14px; color: #aaa;">Don't want to use your webcam? Test with a video file:</p>
+        <div style="display: flex; gap: 10px; align-items: center; justify-content: center; margin-bottom: 10px;">
+            <input type="text" id="video-path" placeholder="e.g. test_videos/perfect_pushups_cut.mp4" style="flex: 1; padding: 6px; border-radius: 5px; border: 1px solid #555; background: #111; color: white;">
+            <button id="load-path-btn" style="padding: 6px 15px; border-radius: 5px; background: #00FFCC; color: black; border: none; cursor: pointer; font-weight: bold;">Load Path</button>
+        </div>
+        <p style="margin: 0 0 10px 0; font-size: 14px; color: #777;">Or upload a file from your computer:</p>
         <input type="file" id="video-upload" accept="video/mp4,video/webm" style="color: white; font-size: 14px;">
     </div>
 
@@ -526,6 +531,45 @@
             async function processVideoFrame() {
                 if (!filePlaying || videoElement.paused || videoElement.ended) return;
                 
+                await pose.send({ image: videoElement });
+                requestAnimationFrame(processVideoFrame);
+            }
+            
+            videoElement.onloadeddata = () => {
+                processVideoFrame();
+            };
+        });
+
+        // Load video from path string
+        document.getElementById('load-path-btn').addEventListener('click', () => {
+            const path = document.getElementById('video-path').value.trim();
+            if (!path) return;
+
+            if (camera) {
+                camera.stop();
+                camera = null;
+            }
+
+            // make sure we have a leading slash for the route
+            const srcUrl = path.startsWith('/') ? path : '/' + path;
+
+            videoElement.srcObject = null;
+            videoElement.src = srcUrl;
+            videoElement.loop = true;
+            videoElement.muted = true;
+            filePlaying = true;
+            
+            resetCounters();
+            prevLandmarks = null;
+            
+            videoElement.play().catch(e => {
+                console.error("Failed to play video:", e);
+                aiDisplay.textContent = "Error: Could not load video path!";
+                aiDisplay.style.color = "#FF4444";
+            });
+
+            async function processVideoFrame() {
+                if (!filePlaying || videoElement.paused || videoElement.ended) return;
                 await pose.send({ image: videoElement });
                 requestAnimationFrame(processVideoFrame);
             }

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template, send_from_directory
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime, timezone, timedelta
@@ -236,6 +236,9 @@ def get_path(user_stats, user_data):
         print(f"AI Error: {e}")
         return "Keep pushing! Try to beat your steps from yesterday."
 
+@app.route('/test_videos/<path:filename>')
+def serve_video(filename):
+    return send_from_directory('test_videos', filename)
 
 if __name__ == '__main__':
     # run the server!
