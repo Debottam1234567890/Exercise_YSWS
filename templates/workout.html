@@ -303,7 +303,28 @@
             if (visibleBodyParts < 12) { 
                 aiDisplay.textContent = 'Step back! Entire body must be visible.';
                 aiDisplay.style.color = '#FFAA00';
+                // IMPORTANT: pause the hold timer if its running so it doesnt keep ticking
+                // while the user is out of frame - that would be cheating lol
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
+                prevLandmarks = null; // reset motion tracking so we dont get stale data
                 return;
+            }
+            
+            // if we just came back into frame and had a paused timer, restart it
+            if (lockedExercise && TIMED_EXERCISES.has(lockedExercise) && holdStart && !timerInterval) {
+                timerInterval = setInterval(() => {
+                    const secs = Math.floor((Date.now() - holdStart) / 1000);
+                    const mins = Math.floor(secs / 60);
+                    const rem = secs % 60;
+                    if (mins > 0) {
+                        document.getElementById('hold-time').textContent = mins + ':' + rem.toString().padStart(2, '0');
+                    } else {
+                        document.getElementById('hold-time').textContent = secs + 's';
+                    }
+                }, 500);
             }
 
             // motion check - how much did the person move?
