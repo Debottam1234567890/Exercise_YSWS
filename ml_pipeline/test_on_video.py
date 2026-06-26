@@ -171,10 +171,6 @@ def process_video_frames(frames_df, true_label, verbose=False):
             prev_landmarks = None
             continue
 
-        # MOTION CHECK
-        motion = calc_motion(landmarks, prev_landmarks)
-        prev_landmarks = landmarks
-
         # rep counting on every frame when locked
         if locked_exercise and locked_exercise not in TIMED_EXERCISES:
             raw = get_rep_signal(landmarks)
@@ -218,6 +214,10 @@ def process_video_frames(frames_df, true_label, verbose=False):
         if idx - last_pred_idx < pred_cooldown:
             continue
         last_pred_idx = idx
+
+        # MOTION CHECK - now only updated every cooldown cycle to match 200ms webcam interval
+        motion = calc_motion(landmarks, prev_landmarks)
+        prev_landmarks = landmarks
 
         # GET PREDICTION
         exercise, confidence = predict_from_row(row)
@@ -443,7 +443,7 @@ if __name__ == "__main__":
     parser.add_argument("--sample", type=int, default=3, help="videos per class (default: 3)")
     parser.add_argument("--verbose", action="store_true", help="show lock/unlock events")
     parser.add_argument("--no-visibility", action="store_true", help="skip the visibility check entirely")
-    parser.add_argument("--min-visible", type=int, default=12, help="min visible joints (default 12, use 0 to skip)")
+    parser.add_argument("--min-visible", type=int, default=8, help="min visible joints (default 8, use 0 to skip)")
     args = parser.parse_args()
 
     # override visibility setting

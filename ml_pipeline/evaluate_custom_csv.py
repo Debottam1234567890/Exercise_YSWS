@@ -36,7 +36,7 @@ def evaluate_csv(csv_path):
     tv.MODEL = model
     tv.SCALER = scaler
     tv.LABEL_CLASSES = label_classes
-    tv.MIN_VISIBLE_JOINTS = 0  # Disable visibility check for raw YouTube videos
+    tv.MIN_VISIBLE_JOINTS = 8
     
     print("\n--- Pipeline Evaluation Timeline ---")
     result = tv.process_video_frames(df, true_label="unknown", verbose=True)

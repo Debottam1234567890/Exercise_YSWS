@@ -86,6 +86,11 @@
     <br>
     <button id="reset-btn" onclick="resetCounters()">Reset Counter</button>
 
+    <div style="margin-top: 20px; background: #1a1a2e; padding: 15px; border-radius: 8px; display: inline-block; border: 1px solid #333;">
+        <p style="margin: 0 0 10px 0; font-size: 14px; color: #aaa;">Don't want to use your webcam? Test with a video file:</p>
+        <input type="file" id="video-upload" accept="video/mp4,video/webm" style="color: white; font-size: 14px;">
+    </div>
+
     <script>
         const videoElement = document.getElementById('webcam');
         const canvasElement = document.getElementById('output_canvas');
@@ -299,9 +304,9 @@
                 if (results.poseLandmarks[idx].visibility > 0.65) visibleBodyParts++;
             }
             
-            // STRICT MODE: All 12 major joints (shoulders to ankles) MUST be on camera
-            if (visibleBodyParts < 12) { 
-                aiDisplay.textContent = 'Step back! Entire body must be visible.';
+            // LAPTOP MODE: 8 out of 12 major joints must be on camera (allows legs/ankles to be hidden for pushups/planks)
+            if (visibleBodyParts < 8) { 
+                aiDisplay.textContent = 'Step back! Most of your body must be visible.';
                 aiDisplay.style.color = '#FFAA00';
                 // IMPORTANT: pause the hold timer if its running so it doesnt keep ticking
                 // while the user is out of frame - that would be cheating lol
@@ -482,12 +487,53 @@
         pose.onResults(onResults);
 
         // fire up the webcam
-        const camera = new Camera(videoElement, {
+        let camera = new Camera(videoElement, {
             onFrame: async () => { await pose.send({ image: videoElement }); },
             width: 640,
             height: 480
         });
         camera.start();
+
+        // ======= VIDEO UPLOAD LOGIC =======
+        const videoUpload = document.getElementById('video-upload');
+        let filePlaying = false;
+
+        videoUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Stop the webcam
+            if (camera) {
+                camera.stop();
+                camera = null;
+            }
+
+            // Load the video file
+            const url = URL.createObjectURL(file);
+            videoElement.srcObject = null;
+            videoElement.src = url;
+            videoElement.loop = true;
+            videoElement.muted = true;
+            filePlaying = true;
+            
+            // Reset state
+            resetCounters();
+            prevLandmarks = null;
+            
+            videoElement.play();
+
+            // Manually feed the video frames to mediapipe using requestAnimationFrame
+            async function processVideoFrame() {
+                if (!filePlaying || videoElement.paused || videoElement.ended) return;
+                
+                await pose.send({ image: videoElement });
+                requestAnimationFrame(processVideoFrame);
+            }
+            
+            videoElement.onloadeddata = () => {
+                processVideoFrame();
+            };
+        });
     </script>
 </body>
 </html>
