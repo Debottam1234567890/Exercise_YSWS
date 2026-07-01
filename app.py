@@ -9,7 +9,7 @@ import pandas as pd
 import pickle
 import tensorflow as tf
 
-# setup the openai client for the fitness coach
+# setup the openai client for the fitness coach.
 model = "openrouter:free"
 api_key = os.getenv("OPENROUTER_API_KEY", "your-api-key")
 server_url = "https://ai.hackclub.com/proxy/v1"
