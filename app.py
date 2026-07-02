@@ -21,7 +21,7 @@ client = OpenAI(api_key=api_key, base_url=server_url)
 
 # ==============================================================================
 # AI MODEL SETUP
-# Load the brain ONE TIME when the server starts so we don't crash the RAM
+# Load the brain ONE TIME when the server starts s o we don't crash the RAM
 # ==============================================================================
 print("Loading AI Brain into memory...")
 MODEL = tf.keras.models.load_model('ml_pipeline/exercise_model.keras')

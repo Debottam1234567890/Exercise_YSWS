@@ -1,16 +1,27 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-    <title>AI Workout Reviewer</title>
-    <!-- mediapipe for skeleton tracking -->
+    <title>CYBER GYM - AI Workout Reviewer</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
 
+    
+    <link rel="stylesheet" href="/static/css/style.css">
     <style>
-        body {
+
+        #webcam-app-container {
+            font-family: 'Segoe UI', sans-serif;
+            text-align: center;
+            background: #0a0a0a;
+            color: white;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        #webcam-app-container h1 { color: #ddd; font-size: 22px; margin-bottom: 5px; text-align: center; }
+        
+        body_old {
             font-family: 'Segoe UI', sans-serif;
             text-align: center;
             background: #0a0a0a;
@@ -63,10 +74,285 @@
             transition: background 0.2s;
         }
         #reset-btn:hover { background: #FF6666; }
+    
+    
     </style>
 </head>
-
 <body>
+    <!-- ═══════════════════════════════════════════════════════════════════
+         FIXED SIDE-RAIL TREADMILLS
+         Two vertical tracks on the left and right edges of the viewport.
+         The characters slide up and down with scroll via JS below.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <div class="side-rail left">
+        <div class="rail-track"></div>
+        <img src="/static/assets/game_sprites/prop_basketball_bright.png" class="pixel" style="position:absolute; top:15%; width:50px; left:30px;">
+        <img src="/static/assets/game_sprites/prop_kettlebell_bright.png" class="pixel" style="position:absolute; top:45%; width:45px; left:40px;">
+        <img src="/static/assets/game_sprites/char_running_bright.png" class="rail-runner pixel" id="runner-left" style="bottom:120px;">
+        <img src="/static/assets/game_sprites/prop_treadmill.png" class="rail-treadmill pixel">
+    </div>
+    <div class="side-rail right">
+        <div class="rail-track"></div>
+        <img src="/static/assets/game_sprites/prop_soccer_bright.png" class="pixel" style="position:absolute; top:30%; width:45px; right:40px;">
+        <img src="/static/assets/game_sprites/prop_basketball_bright.png" class="pixel" style="position:absolute; top:75%; width:50px; right:30px;">
+        <img src="/static/assets/game_sprites/char_running_bright.png" class="rail-runner pixel" id="runner-right" style="bottom:120px;">
+        <img src="/static/assets/game_sprites/prop_treadmill.png" class="rail-treadmill pixel">
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div id="landing-page" class="page-wrap">
+
+        <!-- scattered HUD decorations -->
+        <div class="hud" style="top:15px; left:0;">SYS_ONLINE: TRUE<br>VER 4.0.2 // CYBER_GYM</div>
+        <div class="hud" style="top:15px; right:0; text-align:right;">WATTS_MINED: 4,091,822<br>STATUS: ENCRYPTED_OK</div>
+
+        <!-- ============================================================
+             HERO
+             ============================================================ -->
+        <section class="hero" id="hero-sec">
+            <!-- Floating Gear in Hero Section -->
+            <img src="/static/assets/game_sprites/item_dumbbells.png" class="pixel float-gear" style="top: 10%; left: 5%; width: 70px; animation-delay: 0s;">
+            <img src="/static/assets/game_sprites/item_gymbag.png" class="pixel float-gear" style="top: 60%; left: 10%; width: 90px; animation-delay: 1.5s;">
+            <img src="/static/assets/game_sprites/prop_soccer_bright.png" class="pixel float-gear" style="top: 25%; right: 15%; width: 50px; animation-delay: 0.7s;">
+            <img src="/static/assets/game_sprites/prop_kettlebell_bright.png" class="pixel float-gear" style="top: 70%; right: 8%; width: 60px; animation-delay: 2.1s;">
+            <img src="/static/assets/game_sprites/item_water.png" class="pixel float-gear" style="top: 15%; right: 35%; width: 40px; animation-delay: 0.3s; opacity: 0.6;">
+            <img src="/static/assets/game_sprites/item_protein.png" class="pixel float-gear" style="top: 40%; left: 20%; width: 55px; animation-delay: 1.2s; opacity: 0.8;">
+
+            <h1 class="glitch-title">CYBER GYM</h1>
+            <h2 class="hero-sub">SWEAT NOW. GET PAID. REPEAT.</h2>
+            <p class="hero-desc">
+                Your webcam watches your reps. Our AI counts them.
+                You earn <span class="hl">Watts</span>. We ship you
+                <span class="hlg">REAL SPORTS / GYM EQUIPMENT.</span>
+            </p>
+            <button class="btn-go" onclick="startCyberGym()">START EARNING</button>
+
+            <!-- two characters flanking the button -->
+            <div class="hero-chars">
+                <img src="/static/assets/game_sprites/char_boxing_bright.png"  class="hero-char pixel glow-green">
+                <img src="/static/assets/game_sprites/char_lifting.png" class="hero-char pixel glow-pink delay">
+            </div>
+        </section>
+
+        <!-- ──── CAUTION TAPE ──── -->
+        <div class="tape-banner">
+            <div class="tape-text">
+                <span>⚡ CYBER GYM ⚡ SWEAT IS CURRENCY ⚡ NO PAIN NO WATTS ⚡ CYBER GYM ⚡ SWEAT IS CURRENCY ⚡ NO PAIN NO WATTS ⚡ CYBER GYM ⚡ SWEAT IS CURRENCY ⚡ NO PAIN NO WATTS ⚡</span>
+                <span>⚡ CYBER GYM ⚡ SWEAT IS CURRENCY ⚡ NO PAIN NO WATTS ⚡ CYBER GYM ⚡ SWEAT IS CURRENCY ⚡ NO PAIN NO WATTS ⚡ CYBER GYM ⚡ SWEAT IS CURRENCY ⚡ NO PAIN NO WATTS ⚡</span>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             WHAT IS THIS?
+             ============================================================ -->
+        <section style="margin-top:50px; position:relative;">
+            <h3 class="section-label">WHAT IS THIS?</h3>
+
+            <div class="hud pink" style="top:-10px; right:0;">PROTOCOL_ACTIVE<br>FEED: LIVE</div>
+
+            <div class="holo-box">
+                <div class="holo-text">
+                    <div class="sys-tag">SYS_MSG // CYBER_GYM</div>
+                    <h2>Move your body. Earn a ticket to see a World Cup Match or get some gym equipment.</h2>
+                    <p>Cyber Gym is a <span class="g">free</span> platform where <span class="c">your workout is your wallet.</span> Our AI tracks your exercises through your webcam in real-time — <span class="p">no app downloads, no subscriptions.</span></p>
+                    <p>Every rep earns you <span class="y">Watts ⚡</span> — our in-app currency. Stack enough and trade them for <span class="y">real prizes</span> shipped to your door.</p>
+                    <div class="prize-strip"><p>You can even get a chance to meet your favourite player!</p></div>
+                </div>
+                <div class="holo-vis">
+                    <div class="pod-beam"></div>
+                    <div class="pod-outer"></div>
+                    <div class="pod-mid"></div>
+                    <div class="pod-inner"></div>
+                    <img src="/static/assets/game_sprites/char_idle.png" class="pod-char pixel">
+                </div>
+            </div>
+        </section>
+
+        <!-- ──── CAUTION TAPE (pink) ──── -->
+        <div class="tape-banner pink">
+            <div class="tape-text">
+                <span>🏋️ REPS = WATTS 🏋️ AI VERIFIED 🏋️ ZERO CAP 🏋️ REPS = WATTS 🏋️ AI VERIFIED 🏋️ ZERO CAP 🏋️ REPS = WATTS 🏋️ AI VERIFIED 🏋️ ZERO CAP 🏋️</span>
+                <span>🏋️ REPS = WATTS 🏋️ AI VERIFIED 🏋️ ZERO CAP 🏋️ REPS = WATTS 🏋️ AI VERIFIED 🏋️ ZERO CAP 🏋️ REPS = WATTS 🏋️ AI VERIFIED 🏋️ ZERO CAP 🏋️</span>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             HOW DOES THIS WORK?
+             ============================================================ -->
+        <section class="how-section">
+            <div class="how-left">
+                <h3 class="section-label">HOW DOES THIS WORK?</h3>
+                <div class="timeline">
+                    <div class="timeline-step">
+                        <div class="step-title"><span class="step-num">01</span> PICK YOUR WORKOUT</div>
+                        <div class="step-body">Yoga to boxing. Bench press to breakdancing. <span>Literally anything you want.</span></div>
+                    </div>
+                    <div class="timeline-step">
+                        <div class="step-title"><span class="step-num">02</span> HIT RECORD</div>
+                        <div class="step-body">Open your webcam. That's it. <span>No fancy gear needed.</span></div>
+                    </div>
+                    <div class="timeline-step">
+                        <div class="step-title"><span class="step-num">03</span> STACK WATTS ⚡</div>
+                        <div class="step-body">Every rep, every set, every second of effort = <span>Watts in your wallet.</span></div>
+                    </div>
+                    <div class="timeline-step">
+                        <div class="step-title"><span class="step-num">04</span> CASH OUT</div>
+                        <div class="step-body">Trade Watts for real equipment. Stickers. Jump ropes. <span>Match Tickets. More.</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="how-right">
+                <img src="/static/assets/game_sprites/char_yoga.png"       class="vis-sprite pixel" id="vis-yoga"       style="top:15px; left:15px; width:150px;">
+                <img src="/static/assets/game_sprites/char_weights.png"    class="vis-sprite pixel" id="vis-weights"    style="top:160px; right:15px; width:200px;">
+                <img src="/static/assets/game_sprites/char_breakdance.png" class="vis-sprite pixel" id="vis-breakdance" style="bottom:30px; left:30px; width:180px;">
+                <img src="/static/assets/game_sprites/char_jumprope.png"   class="vis-sprite pixel"                      style="bottom:20px; right:20px; width:100px; opacity:.6;">
+                <div class="hud" style="bottom:8px; right:10px; position:absolute;">[ MULTI-MODAL TRACKING ]</div>
+            </div>
+        </section>
+
+        <!-- ============================================================
+             THE LOOT DROP
+             ============================================================ -->
+        <section class="loot-section">
+            <div class="loot-header">
+                <h3 class="section-label" style="margin:0;">THE LOOT DROP</h3>
+                <p>New drops every month.<br><span>The grind never stops.</span></p>
+            </div>
+
+            <div class="loot-grid">
+                <div class="loot-card t1">
+                    <img src="/static/assets/game_sprites/item_water.png" class="loot-img pixel">
+                    <div class="loot-name">Smart Water Bottle</div>
+                    <div class="loot-price">500 WATTS</div>
+                </div>
+                <div class="loot-card t2">
+                    <img src="/static/assets/game_sprites/item_protein.png" class="loot-img pixel">
+                    <div class="loot-name">Cyber-Fuel Protein</div>
+                    <div class="loot-price">1,500 WATTS</div>
+                </div>
+                <div class="loot-card t3">
+                    <img src="/static/assets/game_sprites/char_jumprope.png" class="loot-img pixel">
+                    <div class="loot-name">Neon Jump Rope</div>
+                    <div class="loot-price">5,000 WATTS</div>
+                </div>
+                <div class="loot-card t4">
+                    <div class="badge">LIMITED</div>
+                    <img src="/static/assets/game_sprites/item_dumbbells.png" class="loot-img pixel">
+                    <div class="loot-name">Energy Dumbbells</div>
+                    <div class="loot-price">10,000 WATTS</div>
+                </div>
+                <div class="loot-card t2">
+                    <img src="/static/assets/game_sprites/item_gymbag.png" class="loot-img pixel">
+                    <div class="loot-name">Tactical Gym Bag</div>
+                    <div class="loot-price">8,000 WATTS</div>
+                </div>
+                <div class="loot-card t1 sold">
+                    <div class="loot-emoji">🥉</div>
+                    <div class="loot-name">Sticker Pack</div>
+                    <div class="loot-price">300 WATTS</div>
+                </div>
+                <div class="loot-card t4">
+                    <div class="loot-emoji">👕</div>
+                    <div class="loot-name">Hacker Hoodie</div>
+                    <div class="loot-price">25,000 WATTS</div>
+                </div>
+                <div class="loot-card t4 sold">
+                    <div class="loot-emoji">🎟️</div>
+                    <div class="loot-name">World Cup Tickets</div>
+                    <div class="loot-price">100,000 WATTS</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ──── LIVE STATS BANNER ──── -->
+        <div class="stats-row">
+            <div class="stat-item"><div class="stat-num">4,091,822</div><div class="stat-label">Total Watts Mined</div></div>
+            <div class="stat-item"><div class="stat-num">12,847</div><div class="stat-label">Active Athletes</div></div>
+            <div class="stat-item"><div class="stat-num">839</div><div class="stat-label">Prizes Shipped</div></div>
+            <div class="stat-item"><div class="stat-num">17</div><div class="stat-label">Countries</div></div>
+        </div>
+
+        <!-- ============================================================
+             FAIR PLAY PROTOCOL
+             ============================================================ -->
+        <section class="fair-play">
+            <h3 class="section-label">FAIR PLAY PROTOCOL</h3>
+            <div class="warn-box">
+                <div class="warn-icon">⚠️</div>
+                <div class="warn-content">
+                    <h3>We ship real prizes. So yeah, we check.</h3>
+                    <p>Every workout feed is reviewed by our moderation team before high-tier prizes ship. No fake reps. No loopholes.</p>
+                    <p><span>Legit effort only. 🤙</span></p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ──── CAUTION TAPE ──── -->
+        <div class="tape-banner">
+            <div class="tape-text">
+                <span>⚠️ DO NOT CROSS ⚠️ CHEAT-FREE ZONE ⚠️ AI SURVEILLANCE ACTIVE ⚠️ DO NOT CROSS ⚠️ CHEAT-FREE ZONE ⚠️ AI SURVEILLANCE ACTIVE ⚠️ DO NOT CROSS ⚠️</span>
+                <span>⚠️ DO NOT CROSS ⚠️ CHEAT-FREE ZONE ⚠️ AI SURVEILLANCE ACTIVE ⚠️ DO NOT CROSS ⚠️ CHEAT-FREE ZONE ⚠️ AI SURVEILLANCE ACTIVE ⚠️ DO NOT CROSS ⚠️</span>
+            </div>
+        </div>
+
+        <!-- ============================================================
+             FAQ  (2 columns, 10 questions)
+             ============================================================ -->
+        <section class="faq-section">
+            <h3 class="section-label">FAQ</h3>
+            <div class="faq-grid">
+                <details class="faq-item">
+                    <summary>Do I need equipment?</summary>
+                    <p>A webcam and gravity. That's the whole list.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>Is this actually free?</summary>
+                    <p>100% free. No credit card. No ads. Just sweat.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>How do you track my exercises?</summary>
+                    <p>We run a 3D pose-estimation model directly in your browser. It maps 33 body landmarks in real-time — shoulders, elbows, wrists, hips, knees, ankles — and sends those coordinates to our AI classifier.</p>
+                </details>
+                <details class="faq-item pk">
+                    <summary>Can I cheat?</summary>
+                    <p>You can try. Our AI flags unusual patterns (like impossibly fast reps or zero body motion), and human reviewers check every high-tier cash-out before prizes ship.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>What exercises are supported?</summary>
+                    <p>Squats, push-ups, bicep curls, shoulder presses, planks, yoga poses (tree, lotus, mountain), jumping jacks, and more. We add new ones every month.</p>
+                </details>
+                <details class="faq-item pk">
+                    <summary>How long until I can cash out?</summary>
+                    <p>That depends on how hard you grind. A sticker pack is 500 Watts — about a week of casual workouts. The world cup tickets? That's a marathon, not a sprint.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>Do you store my webcam footage?</summary>
+                    <p>No. Your camera feed never leaves your browser. We only receive skeleton landmark coordinates — 33 pairs of numbers per frame. No images, no video, ever.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>Can I use my phone instead of a laptop?</summary>
+                    <p>Right now Cyber Gym is optimised for laptop / desktop webcams. Mobile support is on our roadmap for Q4.</p>
+                </details>
+                <details class="faq-item pk">
+                    <summary>What happens if my internet drops mid-workout?</summary>
+                    <p>Your reps are buffered locally. When the connection comes back, the app syncs everything automatically. You won't lose a single Watt.</p>
+                </details>
+                <details class="faq-item">
+                    <summary>Who built this?</summary>
+                </details>
+            </div>
+        </section>
+
+        <!-- tiny footer decoration -->
+        <div class="footer-strip">[ CYBER_GYM v4.0.2 // YSWS // 2026 ]</div>
+
+    </div>
+
+    <!-- THE ORIGINAL WEBCAM UI -->
+    <div id="webcam-app-container" style="display: none;">
+
+
     <h1>Real-Time AI Fitness Coach</h1>
     <div id="ai_prediction">Waiting for human...</div>
 
@@ -511,7 +797,7 @@
             width: 640,
             height: 480
         });
-        camera.start();
+        // camera.start(); (moved to button click)
 
         // ======= VIDEO UPLOAD LOGIC =======
         const videoUpload = document.getElementById('video-upload');
@@ -644,6 +930,79 @@
                 }
             });
         });
+    </script>
+
+    
+    </div>
+
+    <script>
+        function startCyberGym() {
+            document.getElementById('landing-page').style.display = 'none';
+            document.getElementById('webcam-app-container').style.display = 'block';
+            // hide the side rails when the webcam app is active
+            document.querySelectorAll('.side-rail').forEach(r => r.style.display = 'none');
+            if (typeof camera !== 'undefined') camera.start();
+            window.scrollTo(0,0);
+        }
+
+        /* ────────────────────────────────────────────────────────────
+           SCROLL-DRIVEN SIDE-RAIL RUNNERS
+           ──────────────────────────────────────────────────────────── */
+        const runnerL = document.getElementById('runner-left');
+        const runnerR = document.getElementById('runner-right');
+
+        window.addEventListener('scroll', () => {
+            const scrollY = window.scrollY;
+            const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+            const scrollPct = Math.min(scrollY / docHeight, 1);
+
+            const maxTravel = window.innerHeight * 0.7;
+            const yOffset = 120 + scrollPct * maxTravel;
+
+            if (runnerL) runnerL.style.bottom = yOffset + 'px';
+            if (runnerR) runnerR.style.bottom = yOffset + 'px';
+
+            const bounceSpeed = Math.max(0.15, 0.5 - scrollPct * 0.4);
+            if (runnerL) runnerL.style.transition = `bottom ${bounceSpeed}s ease-out`;
+            if (runnerR) runnerR.style.transition = `bottom ${bounceSpeed}s ease-out`;
+
+            const visBlock = document.querySelector('.how-right');
+            if (visBlock) {
+                const rect = visBlock.getBoundingClientRect();
+                if (rect.top < window.innerHeight && rect.bottom > 0) {
+                    const pct = (window.innerHeight - rect.top) / window.innerHeight;
+                    const yoga = document.getElementById('vis-yoga');
+                    const bd   = document.getElementById('vis-breakdance');
+                    if (yoga) yoga.style.transform = 'translateY(' + (pct * 25) + 'px)';
+                    if (bd)   bd.style.transform   = 'translateY(' + (pct * -35) + 'px)';
+                }
+            }
+        });
+
+        /* ────────────────────────────────────────────────────────────
+           CUSTOM CURSOR GLOW EFFECT
+           ──────────────────────────────────────────────────────────── */
+        const cursorGlow = document.createElement('div');
+        cursorGlow.id = 'cursor-glow';
+        document.body.appendChild(cursorGlow);
+
+        let mouseX = 0, mouseY = 0;
+        let cursorX = 0, cursorY = 0;
+
+        window.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+        });
+
+        function animateCursor() {
+            // Easing for smooth trailing effect
+            cursorX += (mouseX - cursorX) * 0.15;
+            cursorY += (mouseY - cursorY) * 0.15;
+            
+            cursorGlow.style.transform = `translate(${cursorX}px, ${cursorY}px)`;
+            requestAnimationFrame(animateCursor);
+        }
+        animateCursor();
     </script>
 </body>
 </html>

@@ -1,0 +1,726 @@
+/* ==========================================================================
+   CYBER GYM — MASTER STYLESHEET
+   Hand-coded theme. Zero frameworks. Pure vibes.
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+
+/* -- design tokens -------------------------------------------------------- */
+:root {
+    --bg-void:    #020408;
+    --bg-panel:   #0a0e17;
+    --bg-card:    #0d1220;
+    --neon-cyan:  #00f5ff;
+    --neon-pink:  #ff00a0;
+    --neon-gold:  #ffd700;
+    --neon-green: #00ff41;
+    --text-main:  #eaeaea;
+    --text-dim:   #9a9a9a;
+    --font-head:  'Rajdhani', sans-serif;
+    --font-mono:  'Space Mono', monospace;
+}
+
+/* -- reset ---------------------------------------------------------------- */
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior: smooth; }
+body {
+    background: var(--bg-void);
+    color: var(--text-main);
+    font-family: var(--font-head);
+    overflow-x: hidden;
+    /* subtle scanline overlay on the whole page */
+    background-image:
+        repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,245,255,.015) 2px, rgba(0,245,255,.015) 4px),
+        linear-gradient(rgba(0,245,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,245,255,.025) 1px, transparent 1px);
+    background-size: 100% 4px, 50px 50px, 50px 50px;
+}
+
+img { display:block; max-width:100%; }
+a { color:inherit; text-decoration:none; }
+
+/* -- utility ------------------------------------------------------------- */
+.pixel { image-rendering: pixelated; }
+.glow-cyan  { filter: drop-shadow(0 0 12px rgba(0,245,255,.45)); }
+.glow-pink  { filter: drop-shadow(0 0 12px rgba(255,0,160,.45)); }
+.glow-gold  { filter: drop-shadow(0 0 12px rgba(255,215,0,.45)); }
+
+/* ==========================================================================
+   SIDE TREADMILLS — Fixed vertical rails on left/right edges
+   Characters "run" as user scrolls via JS translateY
+   ========================================================================== */
+.side-rail {
+    position: fixed;
+    top: 0;
+    width: 110px;
+    height: 100vh;
+    z-index: 900;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 30px;
+}
+.side-rail.left  { left: 0; }
+.side-rail.right { right: 0; }
+
+/* the glowing rail track itself */
+.rail-track {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom,
+        transparent 0%,
+        var(--neon-cyan) 20%,
+        var(--neon-cyan) 80%,
+        transparent 100%);
+    opacity: .25;
+}
+.side-rail.left .rail-track  { right: 10px; }
+.side-rail.right .rail-track { left: 10px; }
+
+/* the treadmill machine sits at the bottom */
+.rail-treadmill {
+    width: 100px;
+    z-index: 2;
+}
+.side-rail.right .rail-treadmill { transform: scaleX(-1); }
+
+/* character that runs up and down the rail with scroll */
+.rail-runner {
+    position: absolute;
+    width: 70px;
+    z-index: 3;
+    transition: transform .08s linear;
+}
+.side-rail.right .rail-runner { transform: scaleX(-1); }
+
+/* ==========================================================================
+   CYBERPUNK "CAUTION TAPE" BANNERS
+   Diagonal / horizontal strips across section boundaries
+   ========================================================================== */
+.tape-banner {
+    width: 100%;
+    overflow: hidden;
+    padding: 8px 0;
+    background: repeating-linear-gradient(
+        90deg,
+        var(--neon-gold) 0px,
+        var(--neon-gold) 20px,
+        #222 20px,
+        #222 40px
+    );
+    transform: rotate(-1.5deg);
+    margin: 30px 0;
+    position: relative;
+    z-index: 50;
+}
+.tape-banner .tape-text {
+    display: flex;
+    gap: 60px;
+    animation: tape-scroll 12s linear infinite;
+    white-space: nowrap;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    padding: 3px 0;
+    text-shadow: 1px 1px 0px #000;
+}
+@keyframes tape-scroll {
+    0%   { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+.tape-banner.pink {
+    background: repeating-linear-gradient(
+        90deg,
+        var(--neon-pink) 0px,
+        var(--neon-pink) 20px,
+        #1a0012 20px,
+        #1a0012 40px
+    );
+    transform: rotate(1deg);
+}
+.tape-banner.pink .tape-text { color: #fff; text-shadow: 1px 1px 0px #000; }
+
+/* ==========================================================================
+   CONTAINER / LAYOUT
+   ========================================================================== */
+.page-wrap {
+    max-width: 1500px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 0 130px; /* leave room for the side rails */
+    position: relative;
+}
+
+/* ==========================================================================
+   HUD DECORATIONS — floating tech readouts
+   ========================================================================== */
+.hud {
+    position: absolute;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--neon-cyan);
+    opacity: .5;
+    pointer-events: none;
+    letter-spacing: 2px;
+    line-height: 1.6;
+    z-index: 20;
+}
+.hud::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 1px;
+    background: var(--neon-cyan);
+    opacity: .3;
+    margin-top: 4px;
+}
+.hud.pink { color: var(--neon-pink); }
+.hud.pink::after { background: var(--neon-pink); }
+
+/* ==========================================================================
+   HERO SECTION
+   ========================================================================== */
+.hero {
+    text-align: center;
+    padding: 80px 0 40px;
+    position: relative;
+}
+
+/* glitch title  */
+.glitch-title {
+    font-size: 72px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 8px;
+    position: relative;
+    display: inline-block;
+    color: transparent;
+    -webkit-text-stroke: 2px var(--neon-pink);
+    text-shadow:
+        3px 3px 0 rgba(0,245,255,.7),
+        -3px -3px 0 rgba(255,0,160,.7);
+}
+.glitch-title::before,
+.glitch-title::after {
+    content: "CYBER GYM";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    overflow: hidden;
+    background: var(--bg-void);
+    color: var(--text-main);
+    -webkit-text-stroke: 0;
+}
+.glitch-title::before {
+    left: 3px;
+    text-shadow: -2px 0 red;
+    clip-path: polygon(0 20%,100% 20%,100% 30%,0 30%);
+    animation: g1 2.5s infinite linear alternate-reverse;
+}
+.glitch-title::after {
+    left: -3px;
+    text-shadow: -2px 0 blue;
+    clip-path: polygon(0 60%,100% 60%,100% 70%,0 70%);
+    animation: g2 3s infinite linear alternate-reverse;
+}
+@keyframes g1 {
+    0%   { clip-path: polygon(0 20%,100% 20%,100% 30%,0 30%); }
+    25%  { clip-path: polygon(0 60%,100% 60%,100% 65%,0 65%); }
+    50%  { clip-path: polygon(0 10%,100% 10%,100% 15%,0 15%); }
+    100% { clip-path: polygon(0 80%,100% 80%,100% 85%,0 85%); }
+}
+@keyframes g2 {
+    0%   { clip-path: polygon(0 10%,100% 10%,100% 30%,0 30%); }
+    25%  { clip-path: polygon(0 80%,100% 80%,100% 90%,0 90%); }
+    50%  { clip-path: polygon(0 40%,100% 40%,100% 50%,0 50%); }
+    100% { clip-path: polygon(0 50%,100% 50%,100% 70%,0 70%); }
+}
+
+.hero-sub {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    letter-spacing: 3px;
+    margin: 10px 0 20px;
+}
+.hero-desc {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-dim);
+    max-width: 550px;
+    margin: 0 auto 35px;
+    line-height: 1.7;
+}
+.hero-desc .hl { color: var(--neon-gold); font-weight: 700; }
+.hero-desc .hlg { color: var(--neon-green); font-weight: 700; }
+
+/* CTA button */
+.btn-go {
+    display: inline-block;
+    padding: 16px 50px;
+    font-family: var(--font-head);
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #0033ff, #0088ff);
+    border: 2px solid var(--neon-cyan);
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: 0 0 25px rgba(0,245,255,.35);
+    transition: .25s ease;
+    letter-spacing: 2px;
+}
+.btn-go:hover {
+    box-shadow: 0 0 50px rgba(0,245,255,.7);
+    transform: translateY(-3px);
+}
+
+/* hero characters flanking the CTA */
+.hero-chars {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 80px;
+    margin-top: 40px;
+}
+.hero-char {
+    width: 140px;
+    animation: float 5s ease-in-out infinite;
+}
+.hero-char.delay { animation-delay: -2s; }
+@keyframes float {
+    0%,100% { transform: translateY(0); }
+    50%     { transform: translateY(-12px); }
+}
+
+/* ==========================================================================
+   WHAT IS THIS  (holo-pod)
+   ========================================================================== */
+.section-label {
+    font-size: 26px;
+    color: var(--neon-pink);
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+}
+
+.holo-box {
+    display: flex;
+    background: rgba(5,8,18,.85);
+    border: 2px solid rgba(0,245,255,.25);
+    border-radius: 14px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 0 60px rgba(0,245,255,.04);
+}
+/* corner accents */
+.holo-box::before {
+    content:''; position:absolute; top:0; left:0;
+    width:50px; height:50px;
+    border-top:3px solid var(--neon-cyan);
+    border-left:3px solid var(--neon-cyan);
+    border-top-left-radius:14px;
+}
+.holo-box::after {
+    content:''; position:absolute; bottom:0; right:0;
+    width:50px; height:50px;
+    border-bottom:3px solid var(--neon-pink);
+    border-right:3px solid var(--neon-pink);
+    border-bottom-right-radius:14px;
+}
+
+.holo-text {
+    flex: 1;
+    padding: 50px 40px;
+}
+.sys-tag {
+    display:inline-block;
+    background: rgba(0,245,255,.12);
+    color: var(--neon-cyan);
+    font-family: var(--font-mono);
+    font-size:11px;
+    padding:5px 14px;
+    border-radius:3px;
+    margin-bottom:25px;
+    font-weight:700;
+}
+.holo-text h2 {
+    font-size: 28px;
+    line-height: 1.3;
+    margin-bottom: 25px;
+}
+.holo-text p {
+    font-size: 18px;
+    color: var(--text-dim);
+    line-height: 1.5;
+    margin-bottom: 15px;
+    font-weight: 500;
+}
+.c  { color: var(--neon-cyan);  font-weight:700; }
+.p  { color: var(--neon-pink);  font-weight:700; }
+.g  { color: var(--neon-green); font-weight:700; }
+.y  { color: var(--neon-gold);  font-weight:700; }
+
+.prize-strip {
+    background: rgba(255,0,160,.1);
+    border-left: 5px solid var(--neon-pink);
+    padding: 14px 20px;
+    margin-top: 30px;
+    border-radius: 3px;
+}
+.prize-strip p { margin:0; color:var(--neon-pink); font-weight:700; }
+
+.holo-vis {
+    width: 360px;
+    min-height: 400px;
+    border-left: 2px solid rgba(0,245,255,.15);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,245,255,.02);
+}
+/* css holo-pod rings */
+.pod-outer {
+    position:absolute; bottom:35px;
+    width:280px; height:70px;
+    border:3px solid rgba(0,245,255,.7);
+    border-radius:50%;
+    background:rgba(0,245,255,.08);
+    box-shadow:0 0 25px rgba(0,245,255,.25);
+}
+.pod-mid { position:absolute; bottom:50px; width:200px; height:35px; border:2px solid rgba(255,0,160,.6); border-radius:50%; }
+.pod-inner { position:absolute; bottom:58px; width:130px; height:18px; border:2px solid rgba(255,215,0,.4); border-radius:50%; }
+.pod-beam {
+    position:absolute; bottom:70px;
+    width:280px; height:350px;
+    background:rgba(0,245,255,.04);
+    clip-path:polygon(20% 0%,80% 0%,100% 100%,0% 100%);
+    border-left:1px dashed rgba(0,245,255,.2);
+    border-right:1px dashed rgba(0,245,255,.2);
+}
+.pod-char {
+    position:absolute; bottom:50px;
+    width:240px;
+    z-index:5;
+    animation: float 4s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   HOW DOES IT WORK  (timeline + visuals)
+   ========================================================================== */
+.how-section {
+    display: flex;
+    gap: 40px;
+    align-items: stretch;
+    margin-top: 60px;
+}
+.how-left { flex: 1; }
+.how-right {
+    flex: 1;
+    border: 2px dashed rgba(255,0,160,.2);
+    border-radius: 12px;
+    background: rgba(255,0,160,.03);
+    position: relative;
+    min-height: 500px;
+    overflow: hidden;
+}
+
+.timeline {
+    border-left: 2px solid var(--neon-cyan);
+    padding-left: 35px;
+    margin-left: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+.timeline-step {
+    background: var(--bg-panel);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 8px;
+    padding: 18px 22px;
+    position: relative;
+    max-width: 420px;
+}
+.timeline-step::before {
+    content:'';
+    position:absolute; left:-41px; top:22px;
+    width:10px; height:10px;
+    border-radius:50%;
+    background:var(--bg-void);
+    border:2px solid var(--neon-cyan);
+    box-shadow:0 0 8px var(--neon-cyan);
+}
+.step-num {
+    color:var(--neon-pink);
+    font-family:var(--font-mono);
+    font-weight:700;
+    margin-right:8px;
+}
+.step-title {
+    font-size:18px;
+    text-transform:uppercase;
+    margin-bottom:8px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+}
+.step-body {
+    font-size:16px;
+    color:var(--text-dim);
+    line-height:1.4;
+}
+.step-body span { color:var(--neon-cyan); font-weight:700; }
+
+/* floating chars inside the how-right panel */
+.vis-sprite {
+    position:absolute;
+    image-rendering:pixelated;
+    filter:drop-shadow(0 0 15px rgba(0,245,255,.3));
+}
+
+/* ==========================================================================
+   THE LOOT DROP
+   ========================================================================== */
+.loot-section { margin-top:60px; }
+.loot-header {
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    margin-bottom:30px;
+}
+.loot-header p { color:var(--neon-gold); font-size:16px; text-align:right; }
+.loot-header p span { color:var(--neon-cyan); }
+
+.loot-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+}
+.loot-card {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 30px 15px 20px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,.07);
+    position: relative;
+    overflow: hidden;
+    transition: .3s ease;
+}
+.loot-card:hover {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 25px rgba(0,245,255,.15);
+    transform: translateY(-4px);
+}
+.loot-card.t1 { border-top: 3px solid #CD7F32; }
+.loot-card.t2 { border-top: 3px solid #C0C0C0; }
+.loot-card.t3 { border-top: 3px solid var(--neon-gold); }
+.loot-card.t4 { border-top: 3px solid var(--neon-cyan); }
+
+.loot-img {
+    width:90px; height:90px;
+    object-fit:contain;
+    image-rendering:pixelated;
+    margin:0 auto 15px;
+    filter:drop-shadow(0 0 8px rgba(255,255,255,.15));
+}
+.loot-emoji { font-size:50px; margin-bottom:15px; }
+.loot-name { font-size:15px; color:var(--text-dim); margin-bottom:8px; }
+.loot-price {
+    font-family:var(--font-mono);
+    font-size:13px;
+    color:var(--neon-gold);
+    font-weight:700;
+}
+.badge {
+    position:absolute;
+    top:16px; right:-28px;
+    background:var(--neon-pink);
+    color:#fff;
+    font-size:10px;
+    font-weight:700;
+    padding:4px 32px;
+    transform:rotate(45deg);
+    box-shadow:0 0 10px var(--neon-pink);
+}
+.loot-card.sold {
+    opacity:.45;
+    filter:grayscale(1);
+    pointer-events:none;
+}
+.loot-card.sold::after {
+    content:'SOLD OUT';
+    position:absolute;
+    top:50%; left:50%;
+    transform:translate(-50%,-50%) rotate(-15deg);
+    background:#e00;
+    color:#fff;
+    padding:6px 18px;
+    font-size:16px;
+    font-weight:700;
+    border:3px solid #fff;
+    border-radius:4px;
+}
+
+/* ==========================================================================
+   STATS BANNER (between loot and fair play)
+   ========================================================================== */
+.stats-row {
+    display: flex;
+    justify-content: space-around;
+    padding: 30px 0;
+    margin: 40px 0;
+    border-top: 1px solid rgba(0,245,255,.15);
+    border-bottom: 1px solid rgba(0,245,255,.15);
+}
+.stat-item {
+    text-align: center;
+}
+.stat-num {
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--neon-cyan);
+    font-family: var(--font-mono);
+}
+.stat-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-top: 5px;
+}
+
+/* ==========================================================================
+   FAIR PLAY PROTOCOL
+   ========================================================================== */
+.fair-play { margin-top:60px; }
+.warn-box {
+    background:rgba(255,215,0,.04);
+    border:2px solid var(--neon-gold);
+    clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);
+    padding:30px;
+    display:flex;
+    gap:25px;
+    align-items:flex-start;
+    position:relative;
+}
+.warn-box::before {
+    content:'RESTRICTED_AREA // ENFORCEMENT';
+    position:absolute; top:0; right:0;
+    background:var(--neon-gold);
+    color:#000;
+    font-family:var(--font-mono);
+    font-size:10px;
+    font-weight:700;
+    padding:4px 14px;
+    clip-path:polygon(10px 0,100% 0,100% 100%,0 100%);
+}
+.warn-icon { font-size:44px; }
+.warn-content h3 { color:var(--neon-gold); font-size:22px; margin-bottom:12px; }
+.warn-content p { color:var(--text-dim); font-size:16px; margin-bottom:8px; }
+.warn-content p span { color:var(--neon-pink); font-weight:700; }
+
+/* ==========================================================================
+   FAQ
+   ========================================================================== */
+.faq-section { margin-top:60px; padding-bottom:100px; }
+.faq-grid { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+.faq-item {
+    background:var(--bg-panel);
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:6px;
+    overflow:hidden;
+}
+.faq-item summary {
+    padding:18px 20px;
+    cursor:pointer;
+    font-size:17px;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    gap:12px;
+    list-style:none;
+}
+.faq-item summary::-webkit-details-marker { display:none; }
+.faq-item summary::before {
+    content:'Q';
+    flex-shrink:0;
+    background:rgba(0,245,255,.15);
+    color:var(--neon-cyan);
+    font-family:var(--font-mono);
+    width:28px; height:28px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    border-radius:4px;
+    font-size:14px;
+}
+.faq-item.pk summary::before {
+    background:rgba(255,0,160,.15);
+    color:var(--neon-pink);
+}
+.faq-item p {
+    padding:0 20px 18px 60px;
+    color:var(--text-dim);
+    font-size:15px;
+    line-height:1.5;
+}
+
+/* ==========================================================================
+   FOOTER / BOTTOM DECORATION
+   ========================================================================== */
+.footer-strip {
+    text-align:center;
+    padding:30px 0 60px;
+    font-family:var(--font-mono);
+    font-size:11px;
+    color:rgba(255,255,255,.2);
+    letter-spacing:2px;
+}
+
+/* ==========================================================================
+   WEBCAM APP (hidden until activated)
+   ========================================================================== */
+#webcam-app-container { display:none; }
+
+/* ==========================================================================
+   CUSTOM CURSOR GLOW
+   ========================================================================== */
+#cursor-glow {
+    position: fixed;
+    top: -20px;
+    left: -20px;
+    width: 40px;
+    height: 40px;
+    background: radial-gradient(circle, rgba(0,245,255,0.4) 0%, rgba(0,245,255,0) 70%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    mix-blend-mode: screen;
+    transition: transform 0.05s linear;
+}
+
+/* ==========================================================================
+   FLOATING GEAR (HERO SECTION)
+   ========================================================================== */
+.float-gear {
+    position: absolute;
+    filter: drop-shadow(0 0 15px rgba(255,0,160,.3));
+    z-index: 10;
+    animation: slow-float 6s ease-in-out infinite alternate;
+}
+
+@keyframes slow-float {
+    0% {
+        transform: translateY(0) rotate(-5deg);
+    }
+    100% {
+        transform: translateY(-25px) rotate(5deg);
+    }
+}
